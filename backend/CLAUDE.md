@@ -2,16 +2,17 @@
 
 ## 项目概述
 
-YPrompt Backend 是一个基于 Sanic 的高性能异步后端服务，为 YPrompt 提示词生成器提供完整的数据支持。支持双认证方式（Linux.do OAuth + 本地用户名密码），双数据库支持（SQLite + MySQL），提供提示词的完整生命周期管理、版本控制、标签分类和数据统计功能。
+YPrompt Backend 是一个基于 Sanic 的高性能异步后端服务，为 YPrompt 提示词生成器提供完整的数据支持。采用**零配置启动**设计，默认使用SQLite + 本地认证，无需任何配置即可快速部署。同时支持Linux.do OAuth和MySQL，灵活适应公共和私有部署场景。
 
-**核心功能**:
-- 🔐 双认证: Linux.do OAuth 2.0 + 本地用户名密码
-- 💾 双数据库: SQLite（默认）+ MySQL（可选）
-- 📝 提示词 CRUD 和版本管理
-- 🏷️ 标签分类和统计
-- 📊 数据统计（查看次数、使用次数）
-- 🔄 语义化版本控制和回滚
-- 📚 用户提示词库管理
+**核心特性**:
+- ✅ **零配置启动**: 默认SQLite + 本地认证，自动初始化数据库
+- 🔐 **双认证支持**: Linux.do OAuth 2.0 + 本地用户名密码
+- 💾 **双数据库支持**: SQLite（默认）+ MySQL（可选）
+- 🔒 **安全加密**: bcrypt密码哈希（12轮salt）
+- 📝 **完整CRUD**: 提示词增删改查 + 版本管理
+- 🏷️ **标签系统**: 自动分类和统计
+- 🔄 **版本控制**: 语义化版本 + 完整快照 + 一键回滚
+- 🚀 **高性能**: 异步设计 + 连接池 + 缓存优化
 
 ## 技术栈
 
@@ -101,18 +102,30 @@ backend/
 └── README.md                 # 项目说明
 ```
 
-## 开发命令
+## 快速开始
+
+### 零配置启动（推荐）
 
 ```bash
-# 创建虚拟环境
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
-
-# 安装依赖
+# 1. 安装依赖
 pip install -r requirements.txt
 
-# 开发模式启动（自动重载）
+# 2. 直接启动（无需任何配置）
+python run.py
+
+# ✅ 自动完成：
+# - 创建 ../data/yprompt.db 数据库
+# - 初始化所有表结构
+# - 创建默认管理员账号：admin / admin123
+
+# 访问 API 文档
+http://localhost:8888/docs
+```
+
+### 其他启动方式
+
+```bash
+# 开发模式（自动重载）
 python run.py
 
 # 生产模式启动（多worker）
@@ -1092,9 +1105,9 @@ class Config(BaseConfig):
 - **Swagger UI**: http://localhost:8888/docs
 - **OpenAPI JSON**: http://localhost:8888/openapi.json
 
-## 计划改造
+## ✅ 已完成的重大改造
 
-### 1. 认证改造 - 迁移到 linux.do OAuth
+### 1. 认证系统 - Linux.do OAuth + 本地认证
 
 **当前方案**: 飞书 OAuth 2.0 + JWT
 

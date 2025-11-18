@@ -2,13 +2,14 @@
 
 ## 项目概述
 
-YPrompt 是一个完整的提示词管理系统，包含前端（Vue 3）和后端（Sanic），提供基于 AI 对话的提示词生成、优化、版本管理和个人提示词库功能。系统采用飞书 OAuth 2.0 认证，支持桌面端和移动端响应式布局。
+YPrompt 是一个完整的提示词管理系统，包含前端（Vue 3）和后端（Sanic），提供基于 AI 对话的提示词生成、优化、版本管理和个人提示词库功能。系统支持双认证方式（Linux.do OAuth + 本地用户名密码）、双数据库（SQLite + MySQL），支持桌面端和移动端响应式布局。
 
 **主要功能**:
 - 🤖 AI 引导式需求收集与提示词生成
-- 📝 提示词优化与质量分析
+- 📝 提示词优化与质量分析（系统提示词 + 用户提示词）
 - 📚 个人提示词库管理（收藏、标签、版本控制）
-- 🔐 飞书 OAuth 登录认证
+- 🔐 双认证方式：Linux.do OAuth 2.0 + 本地用户名密码
+- 💾 双数据库支持：SQLite（默认）+ MySQL（可选）
 - 📱 响应式设计（桌面端侧边栏 + 移动端底部导航）
 
 ## 技术栈
@@ -24,8 +25,9 @@ YPrompt 是一个完整的提示词管理系统，包含前端（Vue 3）和后�
 
 ### 后端 (backend/)
 - **框架**: Sanic 23.12.1 (异步高性能)
-- **数据库**: MySQL 8.0+ (使用 ezmysql ORM)
-- **认证**: 飞书 OAuth 2.0 + JWT (PyJWT 2.8.0)
+- **数据库**: SQLite 3（默认，aiosqlite）/ MySQL 8.0+（可选，ezmysql）
+- **认证**: Linux.do OAuth 2.0 + 本地认证 + JWT (PyJWT 2.8.0)
+- **密码加密**: bcrypt 4.1.2
 - **API文档**: Sanic-Ext 23.12.0 (OpenAPI/Swagger)
 - **HTTP客户端**: requests 2.31.0 + httpx 0.25.2
 
@@ -101,8 +103,10 @@ YPrompt/
     │   │   └── versions/           # 版本管理模块
     │   └── utils/                  # 工具类
     │       ├── auth_middleware.py  # JWT认证中间件
+    │       ├── db_adapter.py       # 数据库适配器（SQLite/MySQL）
     │       ├── db_utils.py         # 数据库连接管理
-    │       ├── feishu_utils.py     # 飞书API封装
+    │       ├── linux_do_oauth.py   # Linux.do OAuth封装
+    │       ├── password_utils.py   # 密码工具（加密、验证）
     │       ├── http_utils.py       # HTTP工具
     │       └── jwt_utils.py        # JWT工具类
     ├── config/                     # 配置文件
@@ -111,7 +115,8 @@ YPrompt/
     │   ├── prd.py                  # 生产环境配置
     │   └── settings.py             # 配置加载器
     ├── migrations/                 # 数据库迁移脚本
-    │   └── yprompt.sql            # 初始化脚本
+    │   ├── init_sqlite.sql        # SQLite初始化脚本
+    │   └── init_mysql.sql         # MySQL初始化脚本
     ├── logs/                       # 日志目录
     ├── requirements.txt            # Python依赖
     └── run.py                      # 启动入口
@@ -153,14 +158,14 @@ source venv/bin/activate  # Linux/Mac
 # 安装依赖
 pip install -r requirements.txt
 
-# 配置数据库和飞书应用
-# 编辑 config/dev.py 或 config/prd.py
+# 配置认证和数据库
+# 编辑 config/base.py 选择数据库类型和认证方式
+# 默认使用SQLite + 本地认证，无需额外配置
 
-# 初始化数据库
-mysql -u root -p < migrations/yprompt.sql
-
-# 启动开发服务器
+# 启动开发服务器（SQLite会自动初始化）
 python run.py
+
+# 默认管理员账号：admin / admin123
 
 # 访问API文档
 # http://localhost:8888/docs
@@ -170,28 +175,45 @@ python run.py
 
 ### 1. 认证模块 (auth)
 
-**技术方案**: 飞书 OAuth 2.0 + JWT Token
+**技术方案**: 双认证方式 + JWT Token
 
-**认证流程**:
-1. 前端获取飞书授权码 (code)
-2. 后端通过 code 获取用户 open_id
-3. 老用户: 直接更新登录时间（性能优化，不调用飞书API）
-4. 新用户: 调用飞书API获取完整信息并创建用户
-5. 生成 JWT Token (7天有效期)
-6. 返回 Token 和用户信息
+**认证方式**:
+
+1. **Linux.do OAuth 2.0** (公共部署推荐)
+   - 前端获取Linux.do授权码 (code)
+   - 后端通过code调用Linux.do API获取用户信息
+   - 老用户: 直接更新登录时间
+   - 新用户: 创建用户记录
+   - 生成JWT Token (7天有效期)
+
+2. **本地用户名密码** (私有部署推荐)
+   - 用户名密码登录（bcrypt加密）
+   - 支持用户注册（可配置是否允许）
+   - 默认管理员账号：admin / admin123
+   - 密码强度验证（至少8字符，包含字母和数字）
 
 **关键文件**:
-- 后端: `apps/modules/auth/views.py` - 登录/刷新/用户信息接口
+- 后端: `apps/modules/auth/views.py` - 认证API（双认证支持）
+- 后端: `apps/utils/linux_do_oauth.py` - Linux.do OAuth封装
+- 后端: `apps/utils/password_utils.py` - 密码加密和验证
 - 后端: `apps/utils/jwt_utils.py` - JWT生成和验证
 - 后端: `apps/utils/auth_middleware.py` - 认证装饰器
-- 前端: `src/stores/authStore.ts` - 认证状态管理
+- 前端: `src/stores/authStore.ts` - 认证状态管理（支持双认证）
 
 **API端点**:
 ```
-POST   /api/auth/login        # 飞书code登录
-POST   /api/auth/refresh      # 刷新Token
-GET    /api/auth/userinfo     # 获取用户信息
-POST   /api/auth/logout       # 登出
+# Linux.do OAuth
+POST   /api/auth/linux-do/login    # Linux.do code登录
+GET    /api/auth/config            # 获取认证配置（包含CLIENT_ID）
+
+# 本地认证
+POST   /api/auth/local/login       # 用户名密码登录
+POST   /api/auth/local/register    # 用户注册
+
+# 通用接口
+POST   /api/auth/refresh           # 刷新Token
+GET    /api/auth/userinfo          # 获取用户信息
+POST   /api/auth/logout            # 登出
 ```
 
 ### 2. 提示词模块 (prompts)
@@ -292,20 +314,32 @@ GET    /api/versions/{prompt_id}/compare  # 对比版本
 
 #### users (用户表)
 ```sql
-CREATE TABLE `users` (
-  `id` INT(11) PRIMARY KEY AUTO_INCREMENT,
-  `open_id` VARCHAR(64) UNIQUE NOT NULL,    -- 飞书用户ID
-  `union_id` VARCHAR(64),                   -- 飞书Union ID
-  `name` VARCHAR(100) NOT NULL,
-  `avatar` VARCHAR(255),
-  `email` VARCHAR(100),
-  `mobile` VARCHAR(20),
-  `is_active` TINYINT(1) DEFAULT 1,
-  `last_login_time` DATETIME,
-  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  KEY `idx_open_id` (`open_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  
+  -- Linux.do OAuth字段
+  linux_do_id VARCHAR(64) DEFAULT NULL,
+  linux_do_username VARCHAR(100) DEFAULT NULL,
+  
+  -- 本地认证字段
+  username VARCHAR(50) DEFAULT NULL,
+  password_hash VARCHAR(255) DEFAULT NULL,
+  
+  -- 通用字段
+  name VARCHAR(100) NOT NULL,
+  avatar VARCHAR(500) DEFAULT NULL,
+  email VARCHAR(100) DEFAULT NULL,
+  auth_type VARCHAR(10) NOT NULL DEFAULT 'linux_do',  -- linux_do/local
+  is_active INTEGER NOT NULL DEFAULT 1,
+  is_admin INTEGER NOT NULL DEFAULT 0,
+  
+  last_login_time DATETIME DEFAULT NULL,
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  
+  UNIQUE(linux_do_id),
+  UNIQUE(username)
+);
 ```
 
 #### prompts (提示词表)
@@ -500,129 +534,164 @@ async def protected_route(request):
 3. 在 `src/main.ts` 添加路由
 4. 模块完全自定义布局和功能
 
-## 计划改造
+## 已完成的重大改造
 
-### 1. 认证改造 - 迁移到 linux.do OAuth
+### ✅ 认证改造 - Linux.do OAuth + 本地认证
 
-**当前方案**: 飞书 OAuth 2.0
-**目标方案**: linux.do OAuth
+**✨ 改造成果**:
+- ✅ 已支持Linux.do OAuth 2.0认证
+- ✅ 已支持本地用户名密码认证
+- ✅ 密码使用bcrypt加密（12轮salt）
+- ✅ 密码强度验证（至少8字符，包含字母和数字）
+- ✅ 用户名格式验证
+- ✅ 双认证可独立配置和使用
+- ✅ 前端自动检测可用认证方式
+- ✅ 默认管理员账号自动同步（从配置读取）
 
-**需要改造的文件**:
+**✨ 核心文件**:
+- ✅ `apps/utils/linux_do_oauth.py` - Linux.do OAuth完整实现
+- ✅ `apps/utils/password_utils.py` - 密码加密和验证工具
+- ✅ `apps/modules/auth/views.py` - 双认证API实现
+- ✅ `apps/modules/auth/services.py` - 用户管理服务
+- ✅ `src/stores/authStore.ts` - 前端双认证支持
+- ✅ `src/views/LoginView.vue` - 登录页面（支持双认证）
 
-**后端**:
-- `apps/utils/feishu_utils.py` → 改为 `linux_do_utils.py`
-- `apps/modules/auth/views.py` - 修改登录流程
-- `apps/modules/auth/services.py` - 用户信息字段适配
-- `config/dev.py` / `config/prd.py` - 配置项调整
-  - `FEISHU_APP_ID` → `LINUX_DO_CLIENT_ID`
-  - `FEISHU_APP_SECRET` → `LINUX_DO_CLIENT_SECRET`
-
-**前端**:
-- `src/stores/authStore.ts` - OAuth回调处理
-- 登录页面 - 替换为 linux.do 登录按钮
-
-**数据库**:
-- `users` 表字段调整:
-  - `open_id` → `linux_do_id` (或保持通用字段名)
-  - 移除 `union_id` (飞书特有字段)
-  - 可能需要新增 linux.do 特定字段
-
-### 2. 数据库改造 - 支持 SQLite + MySQL
-
-**当前方案**: 仅支持 MySQL (ezmysql)
-**目标方案**: 同时支持 SQLite 和 MySQL，默认 SQLite
-
-**改造方案**:
-
-1. **数据库抽象层**
-创建 `apps/utils/db_adapter.py`：
-```python
-class DatabaseAdapter:
-    """数据库适配器基类"""
-    async def get(self, sql, params=None): pass
-    async def query(self, sql, params=None): pass
-    async def execute(self, sql, params=None): pass
-    async def table_insert(self, table, data): pass
-    async def table_update(self, table, data, where): pass
-    async def transaction(self): pass
-
-class MySQLAdapter(DatabaseAdapter):
-    """MySQL适配器 (使用ezmysql)"""
-    # 当前实现
-
-class SQLiteAdapter(DatabaseAdapter):
-    """SQLite适配器 (使用aiosqlite)"""
-    # 新增实现
-```
-
-2. **配置文件调整**
+**✨ 配置说明**:
 ```python
 # config/base.py
+
+# Linux.do OAuth配置（留空则不启用）
+LINUX_DO_CLIENT_ID = ''
+LINUX_DO_CLIENT_SECRET = ''
+LINUX_DO_REDIRECT_URI = ''
+
+# 默认管理员账号（首次启动自动创建）
+DEFAULT_ADMIN_USERNAME = 'admin'
+DEFAULT_ADMIN_PASSWORD = 'admin123'
+DEFAULT_ADMIN_NAME = '管理员'
+```
+
+### ✅ 数据库改造 - SQLite + MySQL双支持
+
+**✨ 改造成果**:
+- ✅ 数据库适配器模式实现完成
+- ✅ SQLite为默认数据库（零配置启动）
+- ✅ SQLite自动初始化（检测表结构并执行脚本）
+- ✅ 默认管理员账号自动创建和同步
+- ✅ 支持通过配置切换MySQL
+- ✅ 统一的数据库操作接口
+- ✅ 参数化查询（防止SQL注入）
+
+**✨ 核心文件**:
+- ✅ `apps/utils/db_adapter.py` - 数据库适配器实现
+- ✅ `apps/utils/db_utils.py` - 数据库连接管理
+- ✅ `migrations/init_sqlite.sql` - SQLite初始化脚本
+- ✅ `migrations/init_mysql.sql` - MySQL初始化脚本（待补充）
+
+**✨ 配置说明**:
+```python
+# config/base.py
+
+# 数据库类型选择
 DB_TYPE = 'sqlite'  # 或 'mysql'
 
-# SQLite配置
-SQLITE_DB_PATH = 'data/yprompt.db'
+# SQLite配置（默认）
+SQLITE_DB_PATH = '../data/yprompt.db'
 
-# MySQL配置 (保持现有)
+# MySQL配置（可选）
 DB_HOST = 'localhost'
 DB_USER = 'root'
-# ...
+DB_PASS = ''
+DB_NAME = 'yprompt'
+DB_PORT = 3306
 ```
 
-3. **数据库初始化**
-```python
-# apps/utils/db_utils.py
-def get_db_adapter(app):
-    db_type = app.config.get('DB_TYPE', 'sqlite')
-    if db_type == 'sqlite':
-        return SQLiteAdapter(app.config.SQLITE_DB_PATH)
-    elif db_type == 'mysql':
-        return MySQLAdapter(...)
-```
+**✨ SQLite特性**:
+- ✅ 首次启动自动创建数据库文件
+- ✅ 自动执行表结构初始化脚本
+- ✅ 自动创建默认管理员账号
+- ✅ 每次启动自动同步管理员密码（从配置）
+- ✅ 外键约束自动启用
+- ✅ 使用触发器实现自动更新时间
 
-4. **SQL兼容性**
-- 使用参数化查询 (避免字符串拼接)
-- SQLite 不支持的语法需要条件处理:
-  - `ON UPDATE CURRENT_TIMESTAMP` → 使用触发器
-  - 外键约束默认关闭 → `PRAGMA foreign_keys = ON`
+### 🎯 后续优化建议
 
-5. **迁移脚本**
-- `migrations/yprompt_sqlite.sql` - SQLite初始化脚本
-- `migrations/yprompt_mysql.sql` - MySQL初始化脚本 (现有)
+1. **认证优化**:
+   - 考虑添加邮箱验证
+   - 添加找回密码功能
+   - 添加两步验证
+   - 完善权限管理系统
 
-**需要改造的文件**:
-- `apps/utils/db_utils.py` - 核心改造
-- `apps/modules/*/services.py` - SQL语句适配
-- `requirements.txt` - 添加 `aiosqlite`
-- `config/base.py` - 配置项
-- `migrations/` - 新增SQLite脚本
-
-**注意事项**:
-- ezmysql 使用字符串拼接SQL，需要改为参数化查询防止SQL注入
-- SQLite和MySQL的数据类型映射 (TINYINT → INTEGER等)
-- 日期时间字段处理差异
+2. **数据库优化**:
+   - 补充MySQL初始化脚本
+   - 添加数据库迁移工具
+   - 优化查询性能
+   - 添加数据备份功能
 
 ## 环境配置
 
 ### 后端配置
 
-编辑 `config/dev.py` 或 `config/prd.py`:
+编辑 `config/base.py`:
 
 ```python
+# ==========================================
 # 数据库配置
+# ==========================================
+# 数据库类型: 'sqlite' 或 'mysql'
+DB_TYPE = 'sqlite'  # 默认SQLite，零配置启动
+
+# SQLite配置
+SQLITE_DB_PATH = '../data/yprompt.db'
+
+# MySQL配置（如需使用MySQL，将DB_TYPE改为'mysql'）
 DB_HOST = 'localhost'
 DB_USER = 'root'
 DB_PASS = 'your_password'
 DB_NAME = 'yprompt'
 DB_PORT = 3306
 
+# ==========================================
 # JWT配置
-SECRET_KEY = 'your_secret_key'
+# ==========================================
+SECRET_KEY = 'your_secret_key_change_in_production'
 
-# 飞书应用配置
-FEISHU_APP_ID = 'your_app_id'
-FEISHU_APP_SECRET = 'your_app_secret'
+# ==========================================
+# Linux.do OAuth配置（可选）
+# ==========================================
+# 如不需要Linux.do OAuth，留空即可
+# 申请地址: https://connect.linux.do
+LINUX_DO_CLIENT_ID = ''
+LINUX_DO_CLIENT_SECRET = ''
+LINUX_DO_REDIRECT_URI = 'http://localhost:5173/auth/callback'
+
+# ==========================================
+# 默认管理员账号配置
+# ==========================================
+# 首次启动时自动创建，后续启动自动同步密码
+DEFAULT_ADMIN_USERNAME = 'admin'
+DEFAULT_ADMIN_PASSWORD = 'admin123'
+DEFAULT_ADMIN_NAME = '管理员'
 ```
+
+### 快速启动（零配置）
+
+后端默认使用SQLite + 本地认证，无需任何配置即可启动：
+
+```bash
+cd backend
+pip install -r requirements.txt
+python run.py
+
+# 默认管理员账号
+# 用户名: admin
+# 密码: admin123
+```
+
+首次启动时会自动：
+1. 创建 `data/yprompt.db` 数据库文件
+2. 初始化所有表结构
+3. 创建默认管理员账号
 
 ### 前端配置
 
@@ -718,11 +787,18 @@ FEISHU_APP_SECRET = 'your_app_secret'
 
 ## 项目状态
 
-- ✅ **生成模块**: 完整实现
-- ✅ **认证系统**: 飞书OAuth已实现
-- 🚧 **优化模块**: 开发中
-- 🚧 **操练场**: 开发中
-- 🚧 **我的提示词**: 部分实现
+**核心功能**:
+- ✅ **生成模块**: AI引导式需求收集 + GPrompt四步生成
+- ✅ **优化模块**: 系统提示词优化 + 用户提示词优化 + 质量分析
+- ✅ **我的提示词**: 列表管理 + 版本控制 + 收藏标签
+- 🚧 **操练场**: 规划中
+
+**基础设施**:
+- ✅ **认证系统**: Linux.do OAuth + 本地认证（双支持）
+- ✅ **数据库**: SQLite（默认）+ MySQL（可选）
+- ✅ **版本管理**: 语义化版本 + 完整快照 + 回滚
+- ✅ **响应式布局**: 桌面端侧边栏 + 移动端底部导航
+- ✅ **AI服务**: OpenAI + Anthropic + Google（多提供商）
 
 ## 联系方式
 
