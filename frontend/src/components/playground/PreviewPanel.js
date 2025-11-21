@@ -322,11 +322,11 @@ export default {
                 <div 
                   v-for="(log, idx) in consoleLogs" 
                   :key="idx" 
-                  :class="['px-2 py-1 border-b border-[#f0f0f0] flex gap-2 group font-medium', 
+                  :class="['px-2 py-1 border-b border-[#f0f0f0] flex gap-2 group font-medium select-text', 
                       log.level === 'error' ? 'bg-[#fff0f0] text-[#d32f2f] border-[#ffcdd2]' : 
                       log.level === 'warn' ? 'bg-[#fff8e1] text-[#f57c00] border-[#ffecb3]' : 
                       'text-[#202124] hover:bg-[#f8f9fa]']"
-                >
+               >
                     <div class="flex-shrink-0 text-gray-400 w-[65px] text-[10px] select-none pt-0.5">{{ new Date(log.timestamp).toLocaleTimeString([], {hour12:false}) }}</div>
                     <div class="flex-1 break-words whitespace-pre-wrap relative">
                         <span v-if="log.count > 1" class="bg-gray-200 text-gray-600 px-1.5 rounded-[10px] text-[9px] font-bold mr-1.5 inline-block align-middle min-w-[18px] text-center">{{ log.count }}</span>
