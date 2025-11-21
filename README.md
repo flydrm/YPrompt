@@ -18,7 +18,7 @@ AI通过对话挖掘用户需求，并自动生成专业的提示词，支持系
 ![](imgs/2.gif)
 ![](imgs/3.gif)
 ![](imgs/4.gif)
-![](imgs/5.jpg)
+![](imgs/5.gif)
 ![](imgs/6.gif)
 ![](imgs/7.gif)
 ![](imgs/8.gif)
